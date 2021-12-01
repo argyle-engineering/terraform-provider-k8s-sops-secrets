@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"strings"
 )
 
 func init() {
@@ -38,6 +39,11 @@ func New() func() *schema.Provider {
 					Type:      schema.TypeString,
 					Optional:  true,
 				},
+				"repo": {
+					Sensitive: false,
+					Type:      schema.TypeString,
+					Optional:  true,
+				},
 			},
 		}
 
@@ -49,23 +55,45 @@ func New() func() *schema.Provider {
 
 type apiClient struct {
 	GhToken string
+	Repo    string
 }
 
 func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 
-		token, exists := rd.GetOk("gh_token")
+		requiredValues := []string{"gh_token", "repo"}
 
-		if token == !exists {
-			return nil, diag.Errorf("missing GH token")
-		}
+		values, err := validate(requiredValues, rd)
 
-		if token == "" {
-			return nil, diag.Errorf("missing required 'gh_token' configuration")
+		if err != nil {
+			return nil, err
 		}
 
 		return &apiClient{
-			GhToken: fmt.Sprintf("%s", token),
+			GhToken: fmt.Sprintf("%s", values["gh_token"]),
+			Repo:    fmt.Sprintf("%s", values["repo"]),
 		}, nil
 	}
+}
+
+func validate(requiredValues []string, rd *schema.ResourceData) (map[string]interface{}, diag.Diagnostics) {
+	var missing []string
+
+	found := make(map[string]interface{})
+
+	for _, value := range requiredValues {
+		v, _ := rd.GetOk(value)
+
+		if v == "" {
+			missing = append(missing, fmt.Sprintf("'%s'", value))
+		} else {
+			found[value] = v
+		}
+	}
+
+	if len(missing) > 0 {
+		return found, diag.Errorf("missing required configuration(s): %s ", strings.Join(missing, ","))
+	}
+
+	return found, nil
 }
