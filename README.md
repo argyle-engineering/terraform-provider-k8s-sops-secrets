@@ -46,6 +46,11 @@ provider_installation {
 }
 ```
 
+set `TF_LOG` environment variable to `TRACE` to view all logs and debug information. 
+```shell
+export TF_LOG=TRACE
+```
+
 In order to run the full suite of Acceptance tests, run `make testacc`.
 
 *Note:* Acceptance tests create real resources, and often cost money to run.
