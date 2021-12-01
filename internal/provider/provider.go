@@ -36,8 +36,7 @@ func New() func() *schema.Provider {
 				"gh_token": {
 					Sensitive: true,
 					Type:      schema.TypeString,
-					Required:  true,
-					Optional:  false,
+					Optional:  true,
 				},
 			},
 		}
@@ -62,7 +61,7 @@ func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceDa
 		}
 
 		if token == "" {
-			return nil, diag.Errorf("GH token cannot be empty")
+			return nil, diag.Errorf("missing required 'gh_token' configuration")
 		}
 
 		return &apiClient{

@@ -8,10 +8,10 @@ terraform {
 }
 
 provider "tf-secrets-to-k8s-sops" {
-  # example configuration here
+  gh_token = "something something bobs uncle"
 }
 
 resource "sops_github_secret" "example" {
-  provider = "tf-secrets-to-k8s-sops"
+  provider = tf-secrets-to-k8s-sops
   value = "super secret value"
 }
