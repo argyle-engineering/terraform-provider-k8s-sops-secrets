@@ -1,9 +1,10 @@
-package bin_man
+package provider
 
 import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,7 +16,8 @@ type Binary interface {
 }
 
 func Exists(binaryName string) error {
-	return localExecutor("command", "-v", binaryName)
+	err, _ := LocalExecutor("command", "-v", binaryName)
+	return err
 }
 
 type Kubectl struct{}
@@ -52,12 +54,12 @@ func (k *Kubectl) install() error {
 
 	_, _ = io.Copy(out, resp.Body)
 
-	err := localExecutor("chmod", "+x", "./kubectl")
+	err, _ := LocalExecutor("chmod", "+x", "./kubectl")
 	if err != nil {
 		return fmt.Errorf("failed to apply permission on kubectl file: %s", err)
 	}
 
-	err = localExecutor("mv", "./kubectl", "/usr/local/bin/kubectl")
+	err, _ = LocalExecutor("mv", "./kubectl", "/usr/local/bin/kubectl")
 	if err != nil {
 		return fmt.Errorf("failed to move kubectl file: %s", err)
 	}
@@ -69,18 +71,21 @@ func (k *Kubectl) install() error {
 	return nil
 }
 
-func localExecutor(name string, args ...string) error {
+func LocalExecutor(name string, args ...string) (error, bytes.Buffer) {
 	var out bytes.Buffer
+	var errOut bytes.Buffer
 
 	c := exec.Command(name, args...)
 
 	c.Stdout = &out
+	c.Stderr = &errOut
 
 	err := c.Run()
 
 	if err != nil {
-		return err
+		log.Println(errOut.String())
+		return err, out
 	}
 
-	return nil
+	return nil, out
 }

@@ -1,4 +1,4 @@
-package bin_man
+package provider
 
 import (
 	"testing"
