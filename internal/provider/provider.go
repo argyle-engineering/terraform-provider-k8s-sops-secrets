@@ -44,6 +44,11 @@ func New() func() *schema.Provider {
 					Type:      schema.TypeString,
 					Optional:  true,
 				},
+				"sops_config": {
+					Sensitive: true,
+					Type:      schema.TypeString,
+					Optional:  true,
+				},
 			},
 		}
 
@@ -54,14 +59,15 @@ func New() func() *schema.Provider {
 }
 
 type apiClient struct {
-	GhToken string
-	Repo    string
+	GhToken    string
+	Repo       string
+	SopsConfig string
 }
 
 func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 
-		requiredValues := []string{"gh_token", "repo"}
+		requiredValues := []string{"gh_token", "repo", "sops_config"}
 
 		values, err := validate(requiredValues, rd)
 
@@ -70,8 +76,9 @@ func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceDa
 		}
 
 		return &apiClient{
-			GhToken: fmt.Sprintf("%s", values["gh_token"]),
-			Repo:    fmt.Sprintf("%s", values["repo"]),
+			GhToken:    fmt.Sprintf("%s", values["gh_token"]),
+			Repo:       fmt.Sprintf("%s", values["repo"]),
+			SopsConfig: fmt.Sprintf("%s", values["sops_config"]),
 		}, nil
 	}
 }
