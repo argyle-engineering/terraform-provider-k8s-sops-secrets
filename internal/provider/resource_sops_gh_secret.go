@@ -14,8 +14,7 @@ import (
 
 func resourceSopsGithubSecret() *schema.Resource {
 	return &schema.Resource{
-		// This description is used by the documentation generator and the language server.
-		Description: "Sample resource in the Terraform provider SopsGithubSecret.",
+		Description: "A Github based SOPs encrypted Kubernetes Secret",
 
 		CreateContext: resourceSopsGithubSecretCreate,
 		ReadContext:   resourceSopsGithubSecretRead,
@@ -24,15 +23,19 @@ func resourceSopsGithubSecret() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"name": {
-				// This description is used by the documentation generator and the language server.
 				Description: "Secret name",
 				Type:        schema.TypeString,
 				Optional:    false,
 				Required:    true,
 			},
 			"value": {
-				// This description is used by the documentation generator and the language server.
 				Description: "You're secret string value",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    true,
+			},
+			"namespace": {
+				Description: "namespace to create secret",
 				Type:        schema.TypeString,
 				Optional:    false,
 				Required:    true,
@@ -42,11 +45,10 @@ func resourceSopsGithubSecret() *schema.Resource {
 }
 
 func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// use the meta value to retrieve your client from the provider configure method
+	// using the meta value to retrieve our client from the provider configure method
 	client := meta.(*apiClient)
 
-	idFromAPI := "my-id"
-	d.SetId(idFromAPI)
+	d.SetId(fmt.Sprintf("%s-%s", d.Get("name"), d.Get("namespace")))
 
 	// create a temporary directory to run sops command from
 	// this is required since there is no pragmatic way to send .sops.yaml to the sops binary

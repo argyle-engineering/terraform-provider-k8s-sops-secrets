@@ -16,5 +16,6 @@ provider "tf-secrets-to-k8s-sops" {
 resource "sops_github_secret" "example" {
   provider = tf-secrets-to-k8s-sops
   value = "super secret value"
+  namespace = "default"
   name = "example"
 }
