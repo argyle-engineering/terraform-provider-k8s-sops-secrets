@@ -3,11 +3,17 @@ package provider
 import (
 	"context"
 	"fmt"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"golang.org/x/oauth2"
 	"io/ioutil"
-	"log"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
-	//"github.com/google/go-github/v41/github"
+	"github.com/go-git/go-git/v5"
+	"github.com/google/go-github/v41/github"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -40,6 +46,12 @@ func resourceSopsGithubSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"base_branch": {
+				Description: "git branch where changes should be merged into",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    true,
+			},
 		},
 	}
 }
@@ -49,6 +61,8 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 	client := meta.(*apiClient)
 
 	d.SetId(fmt.Sprintf("%s-%s", d.Get("name"), d.Get("namespace")))
+
+	// ============================== Generate SOPs encrypted K8s Secret ===============================================
 
 	// create a temporary directory to run sops command from
 	// this is required since there is no pragmatic way to send .sops.yaml to the sops binary
@@ -67,8 +81,8 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 	if err != nil {
 		return diag.Errorf("failed to create .sops.yaml file: %s", err)
 	}
-	_, err = f.WriteString(client.SopsConfig)
-	if err != nil {
+
+	if _, err = f.WriteString(client.SopsConfig); err != nil {
 		return diag.Errorf("failed to write .sops.yaml file to sops dir: %s", err)
 	}
 
@@ -114,32 +128,106 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 		return diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
-	out, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops -e /dev/stdin", kubeSecret.String()), tmpDir)
+	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops -e /dev/stdin", kubeSecret.String()), tmpDir)
 
 	if err != nil {
 		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", err)
 	}
 
-	log.Println(out) // successful SOPS generated secret
-	// ======================================= Add file to GH ========================================================
+	// ======================================= Add file to our git repo =================================================
 
-	//ts := oauth2.StaticTokenSource(
-	//	&oauth2.Token{AccessToken: client.GhToken},
-	//)
-	//tc := oauth2.NewClient(ctx, ts)
-	//
-	//ghClient := github.NewClient(tc)
-	//
-	//// list all repositories for the authenticated user
-	//repos, _, err := ghClient.Repositories.List(ctx, "", nil)
-	//
-	//if err != nil {
-	//	return diag.Errorf("error while accessing Github: %s", err)
-	//}
-	//
-	//log.Printf("%v", repos)
+	// create a temporary directory to run our Github Repo
+	repoDir, err := ioutil.TempDir("", "prefix")
+	if err != nil {
+		return diag.Errorf("failed to create temp repo dir: %s", err)
+	}
 
-	//return diag.Errorf("not implemented")
+	// remove the dir after apply is done
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(repoDir)
+
+	// clone repo
+	repoName := fmt.Sprintf("https://%s@github.com/%s.git", client.GhToken, client.Repo)
+	repo, err := git.PlainClone(repoDir, false, &git.CloneOptions{
+		URL: repoName,
+	})
+	if err != nil {
+		return diag.Errorf("error while cloning repo '%s': %s", repoName, err)
+	}
+
+	branchName := plumbing.NewBranchReferenceName(fmt.Sprintf("%s-secret-from-terraform", d.Get("name")))
+	headRef, err := repo.Head()
+	if err != nil {
+		return diag.Errorf("error while getting head reference", err)
+	}
+
+	ref := plumbing.NewHashReference(branchName, headRef.Hash())
+	if err = repo.Storer.SetReference(ref); err != nil {
+		return diag.Errorf("error while setting reference", err)
+	}
+
+	worktree, err := repo.Worktree()
+	if err != nil {
+		return diag.Errorf("error while getting working tree: %s", err)
+	}
+
+	if err = worktree.Checkout(&git.CheckoutOptions{Branch: ref.Name()}); err != nil {
+		return diag.Errorf("error while checking out new branch %s", err)
+	}
+
+	// add files and commit
+	fileName := fmt.Sprintf("%s.enc.yaml", d.Get("name"))
+	fullFileName := filepath.Join(repoDir, fileName)
+	if err = ioutil.WriteFile(fullFileName, []byte(sopsSecret), 0644); err != nil {
+		return diag.Errorf("error while writing sops file: %s", err)
+	}
+
+	// Adds the new file to the staging area.
+	if _, err = worktree.Add(fileName); err != nil {
+		return diag.Errorf("error while adding file to working tree: %s - %s", err, fileName)
+	}
+
+	// commit
+	_, err = worktree.Commit(fmt.Sprintf("adding terraform '%s' secret", d.Get("name")), &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "github-actions[bot]",
+			Email: "41898282+github-actions[bot]@users.noreply.github.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		return diag.Errorf("error while committing to working tree: %s", err)
+	}
+
+	if err = repo.Push(&git.PushOptions{}); err != nil {
+		return diag.Errorf("error while pushing to remote: %s", err)
+	}
+
+	// ======================================= Create GH PR  ===========================================================
+
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: client.GhToken},
+	)
+	tc := oauth2.NewClient(ctx, ts)
+
+	ghClient := github.NewClient(tc)
+
+	repoStr := strings.Split(client.Repo, "/")
+
+	// create PR Request
+	_, _, err = ghClient.PullRequests.Create(ctx, repoStr[0], repoStr[1], &github.NewPullRequest{
+		Title: github.String(fmt.Sprintf("Add terraform '%s' secret", d.Get("name"))),
+		Body:  github.String("Resource created via Terraform :robot:"),
+		Base:  github.String(fmt.Sprintf("%s", d.Get("base_branch"))),
+		Head:  github.String(string(branchName)),
+		Draft: github.Bool(false),
+	})
+
+	if err != nil {
+		return diag.Errorf("error while creating Github Pull Request: %s", err)
+	}
+
 	return nil
 }
 

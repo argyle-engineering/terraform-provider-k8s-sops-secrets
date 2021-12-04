@@ -18,4 +18,5 @@ resource "sops_github_secret" "example" {
   value = "super secret value"
   namespace = "default"
   name = "example"
+  base_branch = "master"
 }
