@@ -9,7 +9,7 @@ terraform {
 
 provider "tf-secrets-to-k8s-sops" {
   gh_token = "something something bobs uncle"
-  repo = "argyle/k8s"
+  repo = "argyle-systems/gh-actions-playground"
   sops_config = file("${path.module}/.sops.yaml")
 }
 
