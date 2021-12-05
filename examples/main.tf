@@ -19,4 +19,5 @@ resource "sops_github_secret" "example" {
   namespace = "default"
   name = "example"
   base_branch = "master"
+  remote_dir = "secrets/"
 }

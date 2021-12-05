@@ -52,6 +52,12 @@ func resourceSopsGithubSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"remote_dir": {
+				Description: "file path where secret should be placed",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    true,
+			},
 		},
 	}
 }
@@ -177,7 +183,13 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 	}
 
 	// add files and commit
-	fileName := fmt.Sprintf("%s.enc.yaml", d.Get("name"))
+	remoteDir := fmt.Sprintf("%s", d.Get("remote_dir"))
+
+	if !strings.HasSuffix(remoteDir, "/") {
+		remoteDir = fmt.Sprintf("%s/", remoteDir)
+	}
+
+	fileName := fmt.Sprintf("%s%s.enc.yaml", remoteDir, d.Get("name"))
 	fullFileName := filepath.Join(repoDir, fileName)
 	if err = ioutil.WriteFile(fullFileName, []byte(sopsSecret), 0644); err != nil {
 		return diag.Errorf("error while writing sops file: %s", err)
