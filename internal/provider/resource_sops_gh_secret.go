@@ -58,6 +58,13 @@ func resourceSopsGithubSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"pr_url": {
+				Description: "URL of the PR that was created",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    false,
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -228,7 +235,7 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 	repoStr := strings.Split(client.Repo, "/")
 
 	// create PR Request
-	_, _, err = ghClient.PullRequests.Create(ctx, repoStr[0], repoStr[1], &github.NewPullRequest{
+	pr, _, err := ghClient.PullRequests.Create(ctx, repoStr[0], repoStr[1], &github.NewPullRequest{
 		Title: github.String(fmt.Sprintf("Add terraform '%s' secret", d.Get("name"))),
 		Body:  github.String("Resource created via Terraform :robot:"),
 		Base:  github.String(fmt.Sprintf("%s", d.Get("base_branch"))),
@@ -238,6 +245,10 @@ func resourceSopsGithubSecretCreate(ctx context.Context, d *schema.ResourceData,
 
 	if err != nil {
 		return diag.Errorf("error while creating Github Pull Request: %s", err)
+	}
+
+	if err = d.Set("pr_url", pr.HTMLURL); err != nil {
+		return diag.FromErr(err)
 	}
 
 	return nil

@@ -21,3 +21,7 @@ resource "sops_github_secret" "example" {
   base_branch = "master"
   remote_dir = "secrets/"
 }
+
+output "PR_URL" {
+  value = sops_github_secret.example.pr_url
+}
