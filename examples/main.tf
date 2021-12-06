@@ -8,20 +8,16 @@ terraform {
 }
 
 provider "tf-secrets-to-k8s-sops" {
-  gh_token = "something something bobs uncle"
-  repo = "argyle-systems/gh-actions-playground"
   sops_config = file("${path.module}/.sops.yaml")
 }
 
-resource "sops_github_secret" "example" {
+resource "sops_secret" "example" {
   provider = tf-secrets-to-k8s-sops
-  value = "super secret value"
+  unencrypted_text = "Swordfish"
   namespace = "default"
   name = "example"
-  base_branch = "master"
-  remote_dir = "secrets/"
 }
 
-output "PR_URL" {
-  value = sops_github_secret.example.pr_url
+output "encrypted_secret" {
+  value = sops_secret.example.encrypted_text
 }

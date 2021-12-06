@@ -28,19 +28,9 @@ func New() func() *schema.Provider {
 	return func() *schema.Provider {
 		p := &schema.Provider{
 			ResourcesMap: map[string]*schema.Resource{
-				"sops_github_secret": resourceSopsGithubSecret(),
+				"sops_secret": resourceSopsSecret(),
 			},
 			Schema: map[string]*schema.Schema{
-				"gh_token": {
-					Sensitive: true,
-					Type:      schema.TypeString,
-					Optional:  true,
-				},
-				"repo": {
-					Sensitive: false,
-					Type:      schema.TypeString,
-					Optional:  true,
-				},
 				"sops_config": {
 					Sensitive: true,
 					Type:      schema.TypeString,
@@ -56,15 +46,13 @@ func New() func() *schema.Provider {
 }
 
 type apiClient struct {
-	GhToken    string
-	Repo       string
 	SopsConfig string
 }
 
 func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 
-		requiredValues := []string{"gh_token", "repo", "sops_config"}
+		requiredValues := []string{"sops_config"}
 
 		values, err := validate(requiredValues, rd)
 
@@ -73,8 +61,6 @@ func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceDa
 		}
 
 		return &apiClient{
-			GhToken:    fmt.Sprintf("%s", values["gh_token"]),
-			Repo:       fmt.Sprintf("%s", values["repo"]),
 			SopsConfig: fmt.Sprintf("%s", values["sops_config"]),
 		}, nil
 	}
