@@ -17,11 +17,3 @@ func TestNotExists(t *testing.T) {
 		t.Errorf("tried to find non-existent-binary and did not fail")
 	}
 }
-
-func TestKubectlInstall(t *testing.T) {
-	kubectl := Kubectl{}
-	err := kubectl.install()
-	if err != nil {
-		t.Errorf("tried to find install kubectl and failed: %s", err)
-	}
-}

@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"io/ioutil"
 	"os"
+	"strings"
 )
 
 func resourceSopsSecret() *schema.Resource {
@@ -78,27 +79,25 @@ func resourceSopsSecretCreate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.Errorf("failed to write .sops.yaml file to sops dir: %s", err)
 	}
 
-	// install kubectl if it does not exist
+	var missingDependencies []string
+
+	// test for kubectl
 	if err = Exists("kubectl"); err != nil {
-		kubectl := Kubectl{}
-		err = kubectl.install()
-		if err != nil {
-			return diag.Errorf("could not install kubectl: %s", err)
-		}
+		missingDependencies = append(missingDependencies, "kubectl")
 	}
 
-	// install sops if it does not exist
+	// test for sops
 	if err = Exists("sops"); err != nil {
-		sops := SOPS{}
-		err = sops.install()
-		if err != nil {
-			return diag.Errorf("could not install sops: %s", err)
-		}
+		missingDependencies = append(missingDependencies, "sops")
 	}
 
 	// test for bash
 	if err = Exists("bash"); err != nil {
-		return diag.Errorf("bash is required to run this provider")
+		missingDependencies = append(missingDependencies, "bash")
+	}
+
+	if len(missingDependencies) > 0 {
+		return diag.Errorf("the following dependencies are required to run this provider: %s", strings.Join(missingDependencies, ", "))
 	}
 
 	// create k8s secret from secret value
@@ -133,22 +132,13 @@ func resourceSopsSecretCreate(ctx context.Context, d *schema.ResourceData, meta 
 }
 
 func resourceSopsSecretRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// use the meta value to retrieve your client from the provider configure method
-	// client := meta.(*apiClient)
-
-	return diag.Errorf("not implemented")
+	return resourceSopsSecretCreate(ctx, d, meta)
 }
 
 func resourceSopsSecretUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// use the meta value to retrieve your client from the provider configure method
-	// client := meta.(*apiClient)
-
-	return diag.Errorf("not implemented")
+	return resourceSopsSecretCreate(ctx, d, meta)
 }
 
 func resourceSopsSecretDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// use the meta value to retrieve your client from the provider configure method
-	// client := meta.(*apiClient)
-
-	return diag.Errorf("not implemented")
+	return nil
 }
