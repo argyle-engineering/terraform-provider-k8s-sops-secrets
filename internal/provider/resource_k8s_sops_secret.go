@@ -100,26 +100,35 @@ func resourceSopsSecretCreate(ctx context.Context, d *schema.ResourceData, meta 
 		return diag.Errorf("the following dependencies are required to run this provider: %s", strings.Join(missingDependencies, ", "))
 	}
 
+	// Create temp file and create secret from there
+	sf, err := os.Create(fmt.Sprintf("%s/secret.txt", tmpDir))
+	if err != nil {
+		return diag.Errorf("failed to create temporary secret file: %s", err)
+	}
+
+	if _, err = sf.WriteString(fmt.Sprintf("%s", d.Get("value"))); err != nil {
+		return diag.Errorf("failed to write temporary secret file: %s", err)
+	}
+
 	// create k8s secret from secret value
 	err, kubeSecret := LocalExecutor(
 		"kubectl",
 		"create",
 		"secret",
 		"generic",
+		"--validate=true",
 		fmt.Sprintf("%s", d.Get("name")),
-		fmt.Sprintf("--from-literal=%s='%s'", d.Get("name"), d.Get("value")),
-		"--namespace",
-		"monitoring",
+		fmt.Sprintf("--from-file=%s=%s", d.Get("name"), fmt.Sprintf("%s/secret.txt", tmpDir)),
+		"--namespace=default",
 		"--dry-run=client",
-		"-o",
-		"yaml",
+		"-o=yaml",
 	)
 
 	if err != nil {
 		return diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
-	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops -e /dev/stdin", kubeSecret.String()), tmpDir)
+	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops --output-type=yaml -e /dev/stdin", kubeSecret.String()), tmpDir)
 
 	if err != nil {
 		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", err)
