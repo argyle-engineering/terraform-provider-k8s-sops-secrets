@@ -8,7 +8,7 @@ import (
 )
 
 func Exists(binaryName string) error {
-	err, _ := LocalExecutor("command", "-v", binaryName)
+	err, _ := LocalExecutor("which", binaryName)
 	return err
 }
 
