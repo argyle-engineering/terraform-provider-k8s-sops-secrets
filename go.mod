@@ -7,4 +7,5 @@ require (
 	github.com/mattn/go-colorable v0.1.11 // indirect
 	github.com/zclconf/go-cty v1.10.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 )
