@@ -81,7 +81,7 @@ func resourceSopsSecretRead(_ context.Context, d *schema.ResourceData, meta inte
 		return depErr
 	}
 
-	err := d.Set("state", sopsSecret)
+	err := d.Set("encrypted_text", sopsSecret)
 	if err != nil {
 		return diag.FromErr(err)
 	}
