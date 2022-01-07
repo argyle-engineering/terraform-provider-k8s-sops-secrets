@@ -50,50 +50,20 @@ func resourceSopsSecret() *schema.Resource {
 }
 
 func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// using the meta value to retrieve our client from the provider configure method
-	client := meta.(*apiClient)
 
 	d.SetId(fmt.Sprintf("%s-%s", d.Get("name"), d.Get("namespace")))
 
+	depErr, tmpDir := setupSOPSConfigFile(meta)
+	if depErr != nil {
+		return depErr
+	}
+
+	depErr = dependencyChecks()
+	if depErr != nil {
+		return depErr
+	}
+
 	// ============================== Generate SOPs encrypted K8s Secret ===============================================
-
-	// create a temporary directory to run sops command from
-	// this is required since there is no pragmatic way to send .sops.yaml to the sops binary
-	tmpDir, err := ioutil.TempDir("", "prefix")
-	if err != nil {
-		return diag.Errorf("failed to create tmp sops dir: %s", err)
-	}
-
-	// remove the dir after apply is done
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tmpDir)
-
-	// write out our .sops.yaml to our tmp dir
-	f, err := os.Create(fmt.Sprintf("%s/.sops.yaml", tmpDir))
-	if err != nil {
-		return diag.Errorf("failed to create .sops.yaml file: %s", err)
-	}
-
-	if _, err = f.WriteString(client.SopsConfig); err != nil {
-		return diag.Errorf("failed to write .sops.yaml file to sops dir: %s", err)
-	}
-
-	var missingDependencies []string
-
-	// test for sops
-	if err = Exists("sops"); err != nil {
-		missingDependencies = append(missingDependencies, "sops")
-	}
-
-	// test for bash
-	if err = Exists("bash"); err != nil {
-		missingDependencies = append(missingDependencies, "bash")
-	}
-
-	if len(missingDependencies) > 0 {
-		return diag.Errorf("the following dependencies are required to run this provider: %s", strings.Join(missingDependencies, ", "))
-	}
 
 	// create k8s secret from secret value
 	name := fmt.Sprintf("%s", d.Get("name"))
@@ -132,4 +102,54 @@ func resourceSopsSecretUpdate(ctx context.Context, d *schema.ResourceData, meta 
 
 func resourceSopsSecretDelete(_ context.Context, _ *schema.ResourceData, _ interface{}) diag.Diagnostics {
 	return nil
+}
+
+func dependencyChecks() diag.Diagnostics {
+	var missingDependencies []string
+
+	// test for sops
+	if err := Exists("sops"); err != nil {
+		missingDependencies = append(missingDependencies, "sops")
+	}
+
+	// test for bash
+	if err := Exists("bash"); err != nil {
+		missingDependencies = append(missingDependencies, "bash")
+	}
+
+	if len(missingDependencies) > 0 {
+		return diag.Errorf("the following dependencies are required to run this provider: %s", strings.Join(missingDependencies, ", "))
+	}
+
+	return nil
+}
+
+func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
+
+	// using the meta value to retrieve our client from the provider configure method
+	client := meta.(*apiClient)
+
+	// create a temporary directory to run sops command from
+	// this is required since there is no pragmatic way to send .sops.yaml to the sops binary
+	tmpDir, err := ioutil.TempDir("", "prefix")
+	if err != nil {
+		return diag.Errorf("failed to create tmp sops dir: %s", err), ""
+	}
+
+	// remove the dir after apply is done
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tmpDir)
+
+	// write out our .sops.yaml to our tmp dir
+	f, err := os.Create(fmt.Sprintf("%s/.sops.yaml", tmpDir))
+	if err != nil {
+		return diag.Errorf("failed to create .sops.yaml file: %s", err), tmpDir
+	}
+
+	if _, err = f.WriteString(client.SopsConfig); err != nil {
+		return diag.Errorf("failed to write .sops.yaml file to sops dir: %s", err), tmpDir
+	}
+
+	return nil, tmpDir
 }
