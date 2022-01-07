@@ -129,11 +129,6 @@ func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
 		return diag.Errorf("failed to create tmp sops dir: %s", err), ""
 	}
 
-	// remove the dir after apply is done
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tmpDir)
-
 	// write out our .sops.yaml to our tmp dir
 	f, err := os.Create(fmt.Sprintf("%s/.sops.yaml", tmpDir))
 	if err != nil {
@@ -149,6 +144,12 @@ func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
 
 func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, diag.Diagnostics) {
 	depErr, tmpDir := setupSOPSConfigFile(meta)
+
+	// remove the dir after apply is done
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tmpDir)
+
 	if depErr != nil {
 		return "", depErr
 	}
