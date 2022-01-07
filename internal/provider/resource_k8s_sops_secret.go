@@ -51,49 +51,42 @@ func resourceSopsSecret() *schema.Resource {
 
 func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 
-	d.SetId(fmt.Sprintf("%s-%s", d.Get("name"), d.Get("namespace")))
+	d.SetId(getID(d))
 
-	depErr, tmpDir := setupSOPSConfigFile(meta)
-	if depErr != nil {
-		return depErr
-	}
-
-	depErr = dependencyChecks()
+	depErr := dependencyChecks()
 	if depErr != nil {
 		return depErr
 	}
 
 	// ============================== Generate SOPs encrypted K8s Secret ===============================================
 
-	// create k8s secret from secret value
-	name := fmt.Sprintf("%s", d.Get("name"))
-	value := fmt.Sprintf("%s", d.Get("value"))
+	sopsSecret, depErr := createSOPSSecret(d, meta)
 
-	s := NewSecret(name)
-	sd := StringData{
-		name: value,
-	}
-	s.StringData = sd
-	kubeSecret, err := s.Marshall()
-
-	if err != nil {
-		return diag.Errorf("error while creating kubernetes secret: %s", err)
+	if depErr != nil {
+		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", depErr)
 	}
 
-	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops --output-type=yaml -e /dev/stdin", kubeSecret), tmpDir)
-
-	if err != nil {
-		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", err)
-	}
-
-	if err = d.Set("encrypted_text", sopsSecret); err != nil {
+	if err := d.Set("encrypted_text", sopsSecret); err != nil {
 		return diag.FromErr(err)
 	}
 	return nil
 }
 
-func resourceSopsSecretRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	return resourceSopsSecretCreate(ctx, d, meta)
+func resourceSopsSecretRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+
+	d.SetId(getID(d))
+
+	sopsSecret, depErr := createSOPSSecret(d, meta)
+	if depErr != nil {
+		return depErr
+	}
+
+	err := d.Set("state", sopsSecret)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
 
 func resourceSopsSecretUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
@@ -152,4 +145,43 @@ func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
 	}
 
 	return nil, tmpDir
+}
+
+func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, diag.Diagnostics) {
+	depErr, tmpDir := setupSOPSConfigFile(meta)
+	if depErr != nil {
+		return "", depErr
+	}
+
+	// create k8s secret from secret value
+	name := fmt.Sprintf("%s", d.Get("name"))
+	value := fmt.Sprintf("%s", d.Get("value"))
+
+	s := NewSecret(name)
+	sd := StringData{
+		name: value,
+	}
+	s.StringData = sd
+	kubeSecret, err := s.Marshall()
+
+	if err != nil {
+		return "", diag.Errorf("error while creating kubernetes secret: %s", err)
+	}
+
+	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo '%s' | sops --output-type=yaml -e /dev/stdin", kubeSecret), tmpDir)
+
+	if err != nil {
+		return "", diag.Errorf("%s", err)
+	}
+
+	return sopsSecret, nil
+
+}
+
+func getID(d *schema.ResourceData) string {
+	if d.Id() != "" {
+		return d.Id()
+	}
+
+	return fmt.Sprintf("%s-%s", d.Get("name"), d.Get("namespace"))
 }
