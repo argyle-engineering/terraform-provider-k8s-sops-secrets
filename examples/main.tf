@@ -12,7 +12,7 @@ provider "tf-secrets-to-k8s-sops" {
 
 resource "sops_secret" "example" {
   provider = tf-secrets-to-k8s-sops
-  unencrypted_text = "Swordfish"
+  unencrypted_text = file("example.json")
   namespace = "default"
   name = "example"
 }
