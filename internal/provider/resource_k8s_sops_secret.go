@@ -2,6 +2,8 @@ package provider
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -32,6 +34,13 @@ func resourceSopsSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"unencrypted_hash": {
+				Description: "Unencrypted string md5sum value",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    false,
+				Computed:    true,
+			},
 			"encrypted_text": {
 				Description: "Encrypted string value",
 				Type:        schema.TypeString,
@@ -60,10 +69,17 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta in
 
 	// ============================== Generate SOPs encrypted K8s Secret ===============================================
 
-	sopsSecret, depErr := createSOPSSecret(d, meta)
+	sopsSecret, kubeSecret, depErr := createSOPSSecret(d, meta)
 
 	if depErr != nil {
 		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", depErr)
+	}
+
+	rawUnencryptedHash := md5.Sum([]byte(kubeSecret))
+	unencryptedHash := hex.EncodeToString(rawUnencryptedHash[:])
+
+	if err := d.Set("unencrypted_hash", unencryptedHash); err != nil {
+		return diag.FromErr(err)
 	}
 
 	if err := d.Set("encrypted_text", sopsSecret); err != nil {
@@ -74,16 +90,20 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta in
 
 func resourceSopsSecretRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 
-	d.SetId(getID(d))
-
-	sopsSecret, depErr := createSOPSSecret(d, meta)
+	sopsSecret, kubeSecret, depErr := createSOPSSecret(d, meta)
 	if depErr != nil {
 		return depErr
 	}
 
-	err := d.Set("encrypted_text", sopsSecret)
-	if err != nil {
-		return diag.FromErr(err)
+	existingHash := fmt.Sprintf("%s", d.Get("unencrypted_hash"))
+	rawNewHash := md5.Sum([]byte(kubeSecret))
+	newHash := hex.EncodeToString(rawNewHash[:])
+
+	if newHash != existingHash {
+		err := d.Set("encrypted_text", sopsSecret)
+		if err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	return nil
@@ -93,7 +113,16 @@ func resourceSopsSecretUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	return resourceSopsSecretCreate(ctx, d, meta)
 }
 
-func resourceSopsSecretDelete(_ context.Context, _ *schema.ResourceData, _ interface{}) diag.Diagnostics {
+func resourceSopsSecretDelete(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
+
+	if err := d.Set("unencrypted_hash", nil); err != nil {
+		return diag.FromErr(err)
+	}
+
+	if err := d.Set("encrypted_text", nil); err != nil {
+		return diag.FromErr(err)
+	}
+
 	return nil
 }
 
@@ -142,7 +171,7 @@ func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
 	return nil, tmpDir
 }
 
-func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, diag.Diagnostics) {
+func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, string, diag.Diagnostics) {
 	depErr, tmpDir := setupSOPSConfigFile(meta)
 
 	// remove the dir after apply is done
@@ -151,7 +180,7 @@ func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, diag.Di
 	}(tmpDir)
 
 	if depErr != nil {
-		return "", depErr
+		return "", "", depErr
 	}
 
 	// create k8s secret from secret value
@@ -166,16 +195,16 @@ func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, diag.Di
 	kubeSecret, err := s.Marshall()
 
 	if err != nil {
-		return "", diag.Errorf("error while creating kubernetes secret: %s", err)
+		return "", "", diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
 	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo \"%s\" | sops --output-type=yaml -e /dev/stdin", kubeSecret), tmpDir)
 
 	if err != nil {
-		return "", diag.Errorf("%s", err)
+		return "", "", diag.Errorf("%s", err)
 	}
 
-	return sopsSecret, nil
+	return sopsSecret, kubeSecret, nil
 
 }
 
