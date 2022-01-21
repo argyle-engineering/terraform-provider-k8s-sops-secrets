@@ -2,10 +2,8 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"strings"
 )
 
 func init() {
@@ -30,13 +28,7 @@ func New() func() *schema.Provider {
 			ResourcesMap: map[string]*schema.Resource{
 				"sops_secret": resourceSopsSecret(),
 			},
-			Schema: map[string]*schema.Schema{
-				"sops_config": {
-					Sensitive: true,
-					Type:      schema.TypeString,
-					Optional:  true,
-				},
-			},
+			Schema: map[string]*schema.Schema{},
 		}
 
 		p.ConfigureContextFunc = configure(p)
@@ -45,45 +37,10 @@ func New() func() *schema.Provider {
 	}
 }
 
-type apiClient struct {
-	SopsConfig string
-}
+type apiClient struct{}
 
 func configure(_ *schema.Provider) func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
 	return func(_ context.Context, rd *schema.ResourceData) (interface{}, diag.Diagnostics) {
-
-		requiredValues := []string{"sops_config"}
-
-		values, err := validate(requiredValues, rd)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return &apiClient{
-			SopsConfig: fmt.Sprintf("%s", values["sops_config"]),
-		}, nil
+		return &apiClient{}, nil
 	}
-}
-
-func validate(requiredValues []string, rd *schema.ResourceData) (map[string]interface{}, diag.Diagnostics) {
-	var missing []string
-
-	found := make(map[string]interface{})
-
-	for _, value := range requiredValues {
-		v, _ := rd.GetOk(value)
-
-		if v == "" {
-			missing = append(missing, fmt.Sprintf("'%s'", value))
-		} else {
-			found[value] = v
-		}
-	}
-
-	if len(missing) > 0 {
-		return found, diag.Errorf("missing required configuration(s): %s ", strings.Join(missing, ","))
-	}
-
-	return found, nil
 }

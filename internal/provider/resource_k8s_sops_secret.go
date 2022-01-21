@@ -22,6 +22,12 @@ func resourceSopsSecret() *schema.Resource {
 		DeleteContext: resourceSopsSecretDelete,
 
 		Schema: map[string]*schema.Schema{
+			"sops_config": {
+				Description: "SOPS config file content in yaml mode",
+				Type:        schema.TypeString,
+				Optional:    false,
+				Required:    true,
+			},
 			"name": {
 				Description: "Secret name",
 				Type:        schema.TypeString,
@@ -58,7 +64,7 @@ func resourceSopsSecret() *schema.Resource {
 	}
 }
 
-func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
 
 	d.SetId(getID(d))
 
@@ -69,7 +75,7 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta in
 
 	// ============================== Generate SOPs encrypted K8s Secret ===============================================
 
-	sopsSecret, kubeSecret, depErr := createSOPSSecret(d, meta)
+	sopsSecret, kubeSecret, depErr := createSOPSSecret(d)
 
 	if depErr != nil {
 		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", depErr)
@@ -88,9 +94,9 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, meta in
 	return nil
 }
 
-func resourceSopsSecretRead(_ context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+func resourceSopsSecretRead(_ context.Context, d *schema.ResourceData, _ interface{}) diag.Diagnostics {
 
-	sopsSecret, kubeSecret, depErr := createSOPSSecret(d, meta)
+	sopsSecret, kubeSecret, depErr := createSOPSSecret(d)
 	if depErr != nil {
 		return depErr
 	}
@@ -146,10 +152,7 @@ func dependencyChecks() diag.Diagnostics {
 	return nil
 }
 
-func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
-
-	// using the meta value to retrieve our client from the provider configure method
-	client := meta.(*apiClient)
+func setupSOPSConfigFile(sopsConfig string) (diag.Diagnostics, string) {
 
 	// create a temporary directory to run sops command from
 	// this is required since there is no pragmatic way to send .sops.yaml to the sops binary
@@ -164,15 +167,18 @@ func setupSOPSConfigFile(meta interface{}) (diag.Diagnostics, string) {
 		return diag.Errorf("failed to create .sops.yaml file: %s", err), tmpDir
 	}
 
-	if _, err = f.WriteString(client.SopsConfig); err != nil {
+	if _, err = f.WriteString(sopsConfig); err != nil {
 		return diag.Errorf("failed to write .sops.yaml file to sops dir: %s", err), tmpDir
 	}
 
 	return nil, tmpDir
 }
 
-func createSOPSSecret(d *schema.ResourceData, meta interface{}) (string, string, diag.Diagnostics) {
-	depErr, tmpDir := setupSOPSConfigFile(meta)
+func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics) {
+
+	sopsConfig := fmt.Sprintf("%s", d.Get("sops_config"))
+
+	depErr, tmpDir := setupSOPSConfigFile(sopsConfig)
 
 	// remove the dir after apply is done
 	defer func(path string) {
