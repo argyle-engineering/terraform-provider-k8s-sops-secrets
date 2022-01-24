@@ -36,7 +36,7 @@ Add the following to your `~/.terraformrc` to use the development version instea
 provider_installation {
 
   dev_overrides {
-      "argyle/tf-secrets-to-k8s-sops" = "/usr/local/bin/"
+      "argyle-engineering/k8s-sops-secrets" = "/usr/local/bin/"
   }
 
   # For all other providers, install them directly from their origin provider

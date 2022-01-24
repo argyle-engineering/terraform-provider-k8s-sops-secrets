@@ -24,7 +24,6 @@ release:
 	GOOS=windows GOARCH=amd64 go build -o ./bin/${BINARY}_${VERSION}_windows_amd64
 
 install: build
-	cp ${BINARY} /usr/local/bin/terraform-provider-hashicups
 	mv ${BINARY} /usr/local/bin/
 
 
