@@ -14,6 +14,7 @@ resource "sops_secret" "example" {
   unencrypted_text = file("example.json")
   namespace = "default"
   name = "example"
+  is_base64 = false
   sops_config = file("${path.module}/.sops.yaml")
 }
 

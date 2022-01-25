@@ -6,6 +6,7 @@ import (
 )
 
 type StringData map[string]string
+type Data map[string]string
 
 type secret struct {
 	APIVersion string `yaml:"apiVersion"`
@@ -15,6 +16,7 @@ type secret struct {
 	} `yaml:"metadata"`
 	Type       string     `yaml:"type"`
 	StringData StringData `yaml:"stringData"`
+	Data       Data       `yaml:"data"`
 }
 
 func NewSecret(name string) *secret {

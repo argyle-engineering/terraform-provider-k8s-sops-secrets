@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -40,6 +41,13 @@ func resourceSopsSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"is_base64": {
+				Description: "Indicates whether we use stringData or ",
+				Type:        schema.TypeBool,
+				Default:     false,
+				Optional:    true,
+				Required:    false,
+			},
 			"unencrypted_hash": {
 				Description: "Unencrypted string md5sum value",
 				Type:        schema.TypeString,
@@ -55,7 +63,7 @@ func resourceSopsSecret() *schema.Resource {
 				Computed:    true,
 			},
 			"namespace": {
-				Description: "Kubernetes namespace where you want your secret to exist",
+				Description: "Kubernetes namespace where you want your stringDataSecret to exist",
 				Type:        schema.TypeString,
 				Optional:    false,
 				Required:    true,
@@ -78,7 +86,7 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, _ inter
 	sopsSecret, kubeSecret, depErr := createSOPSSecret(d)
 
 	if depErr != nil {
-		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", depErr)
+		return diag.Errorf("error while creating sops encrypted kubernetes stringDataSecret: %s", depErr)
 	}
 
 	rawUnencryptedHash := md5.Sum([]byte(kubeSecret))
@@ -192,12 +200,20 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 	// create k8s secret from secret value
 	name := fmt.Sprintf("%s", d.Get("name"))
 	value := fmt.Sprintf("%s", d.Get("value"))
+	isBase64, _ := strconv.ParseBool(fmt.Sprintf("%s", d.Get("is_base_64")))
 
 	s := NewSecret(name)
-	sd := StringData{
-		name: value,
+
+	if isBase64 {
+		s.Data = Data{
+			name: value,
+		}
+	} else {
+		s.StringData = StringData{
+			name: value,
+		}
 	}
-	s.StringData = sd
+
 	kubeSecret, err := s.Marshall()
 
 	if err != nil {
