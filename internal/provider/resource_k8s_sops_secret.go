@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -185,7 +184,7 @@ func setupSOPSConfigFile(sopsConfig string) (diag.Diagnostics, string) {
 
 func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics) {
 
-	sopsConfig := fmt.Sprintf("%s", d.Get("sops_config"))
+	sopsConfig := d.Get("sops_config").(string)
 
 	depErr, tmpDir := setupSOPSConfigFile(sopsConfig)
 
@@ -199,9 +198,9 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 	}
 
 	// create k8s secret from secret value
-	name := fmt.Sprintf("%s", d.Get("name"))
-	value := fmt.Sprintf("%s", d.Get("value"))
-	isBase64, _ := strconv.ParseBool(fmt.Sprintf("%s", d.Get("is_base_64")))
+	name := d.Get("name").(string)
+	value := d.Get("unencrypted_text").(string)
+	isBase64 := d.Get("is_base64").(bool)
 
 	s := NewSecret(name)
 
@@ -222,10 +221,17 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 		return "", "", diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
-	bashScript := fmt.Sprintf("echo \"%s\" | sops --output-type=yaml -e /dev/stdin", kubeSecret)
-	log.Printf("[DEBUG] bashScript output: \n %s \n\n\n", bashScript)
+	// Write K8s secret to file
+	f, err := os.Create(fmt.Sprintf("%s/secret.yaml", tmpDir))
+	if err != nil {
+		return "", "", diag.Errorf("error while creating kubernetes secret: file does not exist")
+	}
 
-	sopsSecret, err := ExecuteBash(bashScript, tmpDir)
+	if _, err = f.WriteString(kubeSecret); err != nil {
+		return "", "", diag.Errorf("error while creating kubernetes secret: file does not exist")
+	}
+
+	sopsSecret, err := ExecuteBash("sops --output-type=yaml -e secret.yaml", tmpDir)
 
 	if err != nil {
 		return "", "", diag.Errorf("%s", err)

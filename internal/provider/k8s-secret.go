@@ -15,8 +15,8 @@ type secret struct {
 		Name string `yaml:"name"`
 	} `yaml:"metadata"`
 	Type       string     `yaml:"type"`
-	StringData StringData `yaml:"stringData"`
-	Data       Data       `yaml:"data"`
+	StringData StringData `yaml:"stringData,omitempty"`
+	Data       Data       `yaml:"data,omitempty"`
 }
 
 func NewSecret(name string) *secret {
