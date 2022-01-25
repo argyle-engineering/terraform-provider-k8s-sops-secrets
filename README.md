@@ -58,3 +58,13 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 ```sh
 $ make testacc
 ```
+
+## Release instructions
+
+In order to release using [gorelaser](https://goreleaser.com/quick-start/) you will need a GitHub Personal Access Token with a full repo scope, you will need
+a valid GPG key as well.
+```sh
+export GITHUB_TOKEN=<TOKEN>
+export GPG_TTY=$(tty)
+export GPG_FINGERPRINT=<FINGERPRINT>
+```
