@@ -62,7 +62,7 @@ $ make testacc
 ## Release instructions
 
 In order to release using [gorelaser](https://goreleaser.com/quick-start/) you will need a GitHub Personal Access Token with a full repo scope, you will need
-a valid GPG key as well.
+a valid GPG key as well. All relases must be signed to be added to the Terraform registry.
 ```sh
 export GITHUB_TOKEN=<TOKEN>
 export GPG_TTY=$(tty)
