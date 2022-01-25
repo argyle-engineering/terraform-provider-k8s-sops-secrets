@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 )
@@ -40,6 +41,13 @@ func resourceSopsSecret() *schema.Resource {
 				Optional:    false,
 				Required:    true,
 			},
+			"is_base64": {
+				Description: "Indicates whether we use stringData or ",
+				Type:        schema.TypeBool,
+				Default:     false,
+				Optional:    true,
+				Required:    false,
+			},
 			"unencrypted_hash": {
 				Description: "Unencrypted string md5sum value",
 				Type:        schema.TypeString,
@@ -55,7 +63,7 @@ func resourceSopsSecret() *schema.Resource {
 				Computed:    true,
 			},
 			"namespace": {
-				Description: "Kubernetes namespace where you want your secret to exist",
+				Description: "Kubernetes namespace where you want your stringDataSecret to exist",
 				Type:        schema.TypeString,
 				Optional:    false,
 				Required:    true,
@@ -78,7 +86,7 @@ func resourceSopsSecretCreate(_ context.Context, d *schema.ResourceData, _ inter
 	sopsSecret, kubeSecret, depErr := createSOPSSecret(d)
 
 	if depErr != nil {
-		return diag.Errorf("error while creating sops encrypted kubernetes secret: %s", depErr)
+		return diag.Errorf("error while creating sops encrypted kubernetes stringDataSecret: %s", depErr)
 	}
 
 	rawUnencryptedHash := md5.Sum([]byte(kubeSecret))
@@ -176,7 +184,7 @@ func setupSOPSConfigFile(sopsConfig string) (diag.Diagnostics, string) {
 
 func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics) {
 
-	sopsConfig := fmt.Sprintf("%s", d.Get("sops_config"))
+	sopsConfig := d.Get("sops_config").(string)
 
 	depErr, tmpDir := setupSOPSConfigFile(sopsConfig)
 
@@ -190,21 +198,40 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 	}
 
 	// create k8s secret from secret value
-	name := fmt.Sprintf("%s", d.Get("name"))
-	value := fmt.Sprintf("%s", d.Get("value"))
+	name := d.Get("name").(string)
+	value := d.Get("unencrypted_text").(string)
+	isBase64 := d.Get("is_base64").(bool)
 
 	s := NewSecret(name)
-	sd := StringData{
-		name: value,
+
+	if isBase64 {
+		s.Data = Data{
+			name: value,
+		}
+	} else {
+		s.StringData = StringData{
+			name: value,
+		}
 	}
-	s.StringData = sd
+
 	kubeSecret, err := s.Marshall()
 
 	if err != nil {
+		log.Printf("[DEBUG] marshalled output: \n %s \n\n\n")
 		return "", "", diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
-	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo \"%s\" | sops --output-type=yaml -e /dev/stdin", kubeSecret), tmpDir)
+	// Write K8s secret to file
+	f, err := os.Create(fmt.Sprintf("%s/secret.yaml", tmpDir))
+	if err != nil {
+		return "", "", diag.Errorf("error while creating kubernetes secret: file does not exist")
+	}
+
+	if _, err = f.WriteString(kubeSecret); err != nil {
+		return "", "", diag.Errorf("error while creating kubernetes secret: file does not exist")
+	}
+
+	sopsSecret, err := ExecuteBash("sops --output-type=yaml -e secret.yaml", tmpDir)
 
 	if err != nil {
 		return "", "", diag.Errorf("%s", err)

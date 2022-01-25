@@ -29,14 +29,14 @@ Fill this in for each provider
 
 If you wish to work on the provider, you'll first need [Go](http://www.golang.org) installed on your machine (see [Requirements](#requirements) above).
 
-To compile the provider, run `make install`. This will build the provider and put the provider binary in the `$GOPATH/bin` directory.
+To compile the provider, run `make install`. This will build the provider and put the provider binary in the `/usrlocal//bin` directory.
 
 Add the following to your `~/.terraformrc` to use the development version instead of pulling from the remote registry.
 ```yaml
 provider_installation {
 
   dev_overrides {
-      "argyle/tf-secrets-to-k8s-sops" = "/usr/local/bin/"
+      "argyle-engineering/k8s-sops-secrets" = "/usr/local/bin/"
   }
 
   # For all other providers, install them directly from their origin provider
@@ -57,4 +57,14 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 
 ```sh
 $ make testacc
+```
+
+## Release instructions
+
+In order to release using [gorelaser](https://goreleaser.com/quick-start/) you will need a GitHub Personal Access Token with a full repo scope, you will need
+a valid GPG key as well. All relases must be signed to be added to the Terraform registry.
+```sh
+export GITHUB_TOKEN=<TOKEN>
+export GPG_TTY=$(tty)
+export GPG_FINGERPRINT=<FINGERPRINT>
 ```

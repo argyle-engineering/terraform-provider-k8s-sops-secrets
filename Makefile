@@ -1,5 +1,5 @@
 TEST?=$$(go list ./... | grep -v 'vendor')
-NAME=tf-secrets-to-k8s-sops
+NAME=k8s-sops-secrets
 BINARY=terraform-provider-${NAME}
 VERSION=0.0.1
 OS_ARCH=darwin_amd64
@@ -24,7 +24,6 @@ release:
 	GOOS=windows GOARCH=amd64 go build -o ./bin/${BINARY}_${VERSION}_windows_amd64
 
 install: build
-	cp ${BINARY} /usr/local/bin/terraform-provider-hashicups
 	mv ${BINARY} /usr/local/bin/
 
 
