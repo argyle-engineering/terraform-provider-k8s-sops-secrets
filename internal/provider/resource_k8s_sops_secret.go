@@ -222,7 +222,10 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 		return "", "", diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
-	sopsSecret, err := ExecuteBash(fmt.Sprintf("echo \"%s\" | sops --output-type=yaml -e /dev/stdin", kubeSecret), tmpDir)
+	bashScript := fmt.Sprintf("echo \"%s\" | sops --output-type=yaml -e /dev/stdin", kubeSecret)
+	log.Printf("[DEBUG] bashScript output: \n %s \n\n\n", bashScript)
+
+	sopsSecret, err := ExecuteBash(bashScript, tmpDir)
 
 	if err != nil {
 		return "", "", diag.Errorf("%s", err)
