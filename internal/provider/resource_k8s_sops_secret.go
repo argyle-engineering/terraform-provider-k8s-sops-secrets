@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"io/ioutil"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -217,6 +218,7 @@ func createSOPSSecret(d *schema.ResourceData) (string, string, diag.Diagnostics)
 	kubeSecret, err := s.Marshall()
 
 	if err != nil {
+		log.Printf("[DEBUG] marshalled output: \n %s \n\n\n")
 		return "", "", diag.Errorf("error while creating kubernetes secret: %s", err)
 	}
 
